@@ -13,20 +13,10 @@ invisible(lapply(rlibs, function(x) suppressMessages(library(x, character.only =
 ##                                             INITIALIZATION
 ####################################################################################################
 
-wd = '.'
-sample_dir = "~/Documents/Mouse/RNAseq/Samples"
-sample_dir = "~/Documents/Human/RNAseq/Samples/SPZ_mRNA"
-sample_dir = "/media/mcoulee/F29A8FEE9A8FADA3/Hayden/RNAseq/BAM"
-dirs = list.dirs(sample_dir, full.names = T, recursive = F)[1]
-# files = list.files(dirs,"RPG")
+wd = 'RNAseq_B1_B2_FC1.5'
+sample_dir = "Samples"
 files = list.files(sample_dir,"RPG")
-
-# files = list.files(dirs,"RPG")
-
-rout = "../MSCI/CPM_0"
 rout = "."
-
-LFC = log2(1.5)
 
 CT = list.dirs(sample_dir, full.names = F, recursive = F)
 nk = 8
@@ -34,12 +24,10 @@ nk = 8
 ## Load SamplePlan data descriptor
 SamplePlan = read.table(paste0(wd,"/SamplePlan.tsv"),sep = "\t", h = T, row.names = 1)
 SamplePlan$SampleType = factor(SamplePlan$SampleType)
-# SamplePlan$CellType = factor(SamplePlan$CellType,levels = CT)
 SamplePlan$CellType = factor(SamplePlan$CellType)
-# SamplePlan$CellType = factor(SamplePlan$CellType,levels = c("Kit_m_spike","Kit_p_spike"))
-SamplePlan$SamplePool = factor(SamplePlan$SamplePool)
-SamplePlan$CellTypeRed = factor(SamplePlan$CellTypeRed)
+SamplePlan$CellTypeRed = factor(SamplePlan$CellType)
 SamplePlan$BatchEffect = factor(SamplePlan$BatchEffect)
+SamplePlan$SamplePath = "Samples"
 
 ####################################################################################################
 ##                                              SUMMARY STATS
@@ -189,29 +177,10 @@ genecounts = list(
       design = ~1)))[expressed_genes, ]
 )
 
-## Distribution read alignment in each cell type
-# read_distribution = genecounts$cpm
-# table_variance = data.frame()
-# distribution = lapply(CT, function(x) {
-#   print(x)
-#   read_distribution_sample = read_distribution[,grepl(x,colnames(read_distribution))]
-#   list_condition = lapply(c("KO","Ctl"), function(condition) {
-#     read_distribution_sample_condition = read_distribution_sample[,grepl(condition,
-#       colnames(read_distribution_sample), ignore.case = T)]
-#     read_distribution_all = unlist(as.list(read_distribution_sample_condition))
-#     read_distribution_variance = var(read_distribution_all)
-#     print(paste0(condition," : ",read_distribution_variance))
-#
-#     return(read_distribution_all)
-#   })
-#   return(list_condition)
-# })
-
 ## Load gene annotations (from Genecode transcripts.fa)
 gene_annotation = data.frame(do.call(rbind, strsplit(x = gsub(
   pattern = "^>", replacement = '', x = unlist(system(paste('zgrep -P "^>"',
     file.path('../gencode.vM19.transcripts.fa.gz')), intern = T)),
-    # file.path('~/Documents/Annotations/gencode.v38.transcripts.fa.gz')), intern = T)),
   perl = T), split = '|', fixed = T)), stringsAsFactors = F)
 names(gene_annotation) = c('tx_ENS', 'gene_ENS', 'gene_OTT', 'tx_OTT', 'tx_name', 'gene_name',
   'tx_length', 'gene_type')
@@ -219,23 +188,18 @@ gene_annotation[gene_annotation == '-'] = NA
 gene_annotation$tx_length = as.numeric(gene_annotation$tx_length)
 bed_annotation = read.table("../gencode.vM19.annotation.bed", sep = "\t",
   h = F)
-# bed_annotation = read.table("~/Documents/Annotations/gencode.v38.annotation.bed", sep = "\t",
-#   h = F)[,1:6]
-colnames(bed_annotation) = c("chr","start","end","strand","score","gene_ENS") ## Mouse
-# colnames(bed_annotation) = c("chr","start","end","gene_ENS","score","strand") ## Human
+colnames(bed_annotation) = c("chr","start","end","strand","score","gene_ENS")
 
 gene_annotation = merge(bed_annotation,gene_annotation, by = "gene_ENS")
 
 ## Estimating gene_length by using GenomicFeatures
 txdb = makeTxDbFromGFF(file.path('../gencode.vM19.annotation.gtf'),
-# txdb = makeTxDbFromGFF(file.path('~/Documents/Annotations/gencode.v38.annotation.gtf'),
   format = 'gtf')
 exons.list.per.gene = exonsBy(x = txdb, by = 'gene')
 ## Same but much faster
 exonic.gene.sizes = sum(width(reduce(exons.list.per.gene)))
 genecounts$rpkm = rpkm(y = x, gene.length = exonic.gene.sizes[match(names(exonic.gene.sizes),
   rownames(x))], normalized.lib.sizes = T, log = F)[expressed_genes, ]
-
 write.table(genecounts$rpkm,"genecounts_rpkm.tsv", quote  = F, sep = "\t", col.names = T,
   row.names = T)
 
@@ -266,21 +230,13 @@ for(dir in unique(SamplePlan$CellType)) {
     sep = "\t")
 
   xx = table[,c("Name","Description",name)]
-  # xx = table[,c("Name","Description",name[c(2,1,3,4,6,5)])] # SPIN1
-
   write.table(xx,paste0(dir,"_genecounts.gct"),row.names = F, col.names = T, quote = F,
     sep = "\t")
 }
 
-## Create a file for TC analysis
 colnames(genecounts$raw) = rownames(SamplePlan)
 write.table(genecounts$raw,paste0(rout,"/genecounts_filtered_raw.tsv"),row.names = T, col.names = T, quote = F,
 sep = "\t")
-
-# write.table(gene_annotation,"~/Documents/Annotations/human_gene_annotation.tsv",row.names = F,
-#   col.names = T, quote = F,sep = "\t")
-# write.table(exonic.gene.sizes,"~/Documents/Annotations/human_gene_length.tsv",row.names = T,
-#   col.names= F, quote = F,sep = "\t")
 
 ####################################################################################################
 ##                                      SAMPLE DISTRIBUTION
